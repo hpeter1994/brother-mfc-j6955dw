@@ -1,0 +1,26 @@
+post_install() {
+  cat <<'MSG'
+==> Add the network printer (replace the IP if needed):
+      sudo lpadmin -p MFC-J6955DW -E -v lpd://192.168.1.52/binary_p1 \
+        -P /usr/share/ppd/Brother/brother_mfcj6955dw_printer_en.ppd
+    Remove any auto-created driverless/IPP queue for the same printer, so
+    the print dialog does not pick it instead.
+==> Change defaults with e.g.:
+      lpadmin -p MFC-J6955DW -o print-color-mode-default=monochrome \
+        -o print-quality-default=5 -o PageSize=A4
+    (print-quality: 3=draft 4=normal 5=high/fine)
+    and list options with: lpoptions -p MFC-J6955DW -l
+MSG
+}
+
+post_upgrade() {
+  cat <<'MSG'
+==> CUPS keeps its own copy of the PPD. Refresh the queue to pick up PPD
+    changes (queue defaults set with lpadmin -o ...-default are kept):
+      sudo lpadmin -p MFC-J6955DW -P /usr/share/ppd/Brother/brother_mfcj6955dw_printer_en.ppd
+MSG
+}
+
+pre_remove() {
+  lpadmin -x MFC-J6955DW 2>/dev/null || true
+}

@@ -1,0 +1,549 @@
+diff -ru orig/cupswrapper/brother_lpdwrapper_mfcj6955dw new/cupswrapper/brother_lpdwrapper_mfcj6955dw
+--- a/cupswrapper/brother_lpdwrapper_mfcj6955dw	2021-06-09 08:19:30.000000000 +0000
++++ b/cupswrapper/brother_lpdwrapper_mfcj6955dw	2026-10-17 12:50:37.375632390 +0000
+@@ -446,10 +446,7 @@
+    "-pt"       =>  "A4"     ,
+    "-inslot"   =>  "AutoSelect"   ,
+    "-reso"     =>  "Normal"    ,
+-   "-corm"     =>  "Auto"  ,
+-   "-cm"       =>  "Vivid"  ,
+-   "-gray"     =>  "ON"  ,
+-   "-bp"       =>  "OFF"  ,
++   "-corm"     =>  "FullColor"  ,
+    "-ts"       =>  "OFF"  ,
+    "-improve"  =>  "OFF"  ,
+    "-duplex"   =>  "None"   ,
+@@ -460,8 +457,38 @@
+    "-blue"     =>  "0"      ,
+    "-satu"     =>  "0"      ,
+    "-sb"       =>  "OFF"    ,
+-   "-qm"       =>  "UseDeviceSettings"    ,
+  );
++ # Arch: standard IPP job attributes sent by GTK/Qt/LibreOffice/browser
++ # print dialogs. cupsd adds the queue's print-color-mode-default to every
++ # job, so colour is mapped both ways (set the default with
++ # lpadmin -o print-color-mode-default=...). For quality only non-default
++ # choices are mapped so lpadmin -o BRResolution=... is not overridden.
++ %ipp_commandline = (
++  'print-color-mode=color'              => {"opt"=>"-corm" ,   "val"=>"FullColor"},
++  'print-color-mode=monochrome'         => {"opt"=>"-corm" ,   "val"=>"Mono"},
++  'print-color-mode=auto-monochrome'    => {"opt"=>"-corm" ,   "val"=>"Mono"},
++  'print-color-mode=process-monochrome' => {"opt"=>"-corm" ,   "val"=>"Mono"},
++  'print-quality=3'                     => {"opt"=>"-reso" ,   "val"=>"Draft"},
++  'print-quality=5'                     => {"opt"=>"-reso" ,   "val"=>"Fine"},
++  'sides=one-sided'                     => {"opt"=>"-duplex" , "val"=>"None"},
++  'sides=two-sided-long-edge'           => {"opt"=>"-duplex" , "val"=>"DuplexNoTumble"},
++  'sides=two-sided-short-edge'          => {"opt"=>"-duplex" , "val"=>"DuplexTumble"},
++  # cupsd only maps media-source/media-type inside media-col; these cover
++  # the stand-alone attributes and entries of a "media=a,b,c" list
++  'media-source=auto'                   => {"opt"=>"-inslot" , "val"=>"AutoSelect"},
++  'media-source=tray-1'                 => {"opt"=>"-inslot" , "val"=>"Tray1"},
++  'media-source=tray-2'                 => {"opt"=>"-inslot" , "val"=>"Tray2"},
++  'media-source=by-pass-tray'           => {"opt"=>"-inslot" , "val"=>"MPTray"},
++  'media-type=stationery'               => {"opt"=>"-md" ,     "val"=>"Plain"},
++  'media-type=photographic-glossy'      => {"opt"=>"-md" ,     "val"=>"Glossy"},
++  'media-type=stationery-inkjet'        => {"opt"=>"-md" ,     "val"=>"Inkjet"},
++  'media-type=ijhagaki-com'             => {"opt"=>"-md" ,     "val"=>"IJHagakiCom"},
++  'media-type=glossy-hagaki-com'        => {"opt"=>"-md" ,     "val"=>"GlossyHagakiCom"},
++  'media-type=plain-hagaki-com'         => {"opt"=>"-md" ,     "val"=>"PlainHagakiCom"},
++  'media-type=ijhagaki-addr'            => {"opt"=>"-md" ,     "val"=>"IJHagakiAddr"},
++  'media-type=glossy-hagaki-addr'       => {"opt"=>"-md" ,     "val"=>"GlossyHagakiAddr"},
++  'media-type=plain-hagaki-addr'        => {"opt"=>"-md" ,     "val"=>"PlainHagakiAddr"},
++);
+  %ppddefaultslist = (
+     "DefaultBRMediaType"                       => \%DefaultBRMediaType,
+     "DefaultPageSize"                          => \%DefaultPageSize,
+@@ -483,6 +510,34 @@
+     "DefaultBRSkipBlank"                       => \%DefaultBRSkipBlank,
+     "DefaultBRQuietMode"                       => \%DefaultBRQuietMode,
+   );
++ # Arch: the PPD uses the standard InputSlot/MediaType keywords, standard
++ # media type names and *.Fullbleed borderless sizes so cupsd can map IPP
++ # media-source/media-type/media to them. Accept those names as well and
++ # translate them back to Brother's values.
++ %fullbleed_alias = (
++    'A3.Fullbleed'       => 'BrA3_B_B',
++    'Tabloid.Fullbleed'  => 'BrLedger_B_B',
++    'A4.Fullbleed'       => 'BrA4_B',
++    'Letter.Fullbleed'   => 'BrLetter_B',
++    'A6.Fullbleed'       => 'BrA6_B',
++    '4x6.Fullbleed'      => 'BrPostC4x6_B',
++    '5x8.Fullbleed'      => 'BrIndexC5x8_B',
++    '3.5x5.Fullbleed'    => 'BrPhotoL_B',
++    '5x7.Fullbleed'      => 'BrPhoto2L_B',
++    'Postcard.Fullbleed' => 'BrHagaki_B',
++  );
++ foreach (keys %fullbleed_alias){
++    $DefaultPageSize{optionlist}{$_} = {"opt"=>"-pt" , "val"=>$fullbleed_alias{$_}};
++ }
++ $DefaultBRMediaType{optionlist}{'Stationery'}         = {"opt"=>"-md" , "val"=>"Plain"};
++ $DefaultBRMediaType{optionlist}{'PhotographicGlossy'} = {"opt"=>"-md" , "val"=>"Glossy"};
++ %DefaultInputSlot = ( "optionname" => 'DefaultInputSlot' ,
++                       "optionlist" => $DefaultBRInputSlot{optionlist} );
++ %DefaultMediaType = ( "optionname" => 'DefaultMediaType' ,
++                       "optionlist" => $DefaultBRMediaType{optionlist} );
++ $ppddefaultslist{DefaultInputSlot} = \%DefaultInputSlot;
++ $ppddefaultslist{DefaultMediaType} = \%DefaultMediaType;
++
+  %mediaoptlist = (
+     "DefaultPageSize"      => \%DefaultPageSize,
+     "DefaultBRMediaType"   => \%DefaultBRMediaType,
+@@ -492,12 +547,14 @@
+ 
+ 
+ 
+-my $LATESTINFO="/tmp/".$PRINTER."_latest_print_info";
++my $TMPDIR = $ENV{TMPDIR} ne '' ? $ENV{TMPDIR} : "/tmp";
++
++my $LATESTINFO="$TMPDIR/".$PRINTER."_latest_print_info";
+ unlink $LATESTINFO;
+ `touch $LATESTINFO`;
+ 
+ 
+-my $TEMPRC = "/tmp/br".$PRINTER."rc_".$$;
++my $TEMPRC = "$TMPDIR/br".$PRINTER."rc_".$$;
+ 
+ 
+ `cp  $basedir/inf/br${PRINTER}rc  $TEMPRC`;
+@@ -505,7 +562,9 @@
+ 
+ logprint( 0 , "TEMPRC    = $TEMPRC\n");
+ 
+-$LOCKFILE="/tmp/$PRINTER"."_lf_".$ENV{DEVICE_URI};
++my $LOCKURI = $ENV{DEVICE_URI};
++$LOCKURI =~ s/[^A-Za-z0-9._-]/_/g;
++$LOCKFILE="$TMPDIR/$PRINTER"."_lf_".$LOCKURI;
+ 
+ if ( $DEVICEURILOCK == 1){
+    open (FILE , "+> $LOCKFILE");
+@@ -534,6 +593,29 @@
+   }
+ }
+ 
++# Arch: libcupsfilters 2 pdftopdf already rotates back pages 180 degrees for
++# sides=two-sided-long-edge. The Brother filter rotates them again for
++# DuplexNoTumble, so the back side would come out upside down. For PDF input
++# with that option, let the Brother filter leave back pages as they are.
++my $SPOOLED = '';
++if ( $CUPSINPUT eq '' ){
++    $SPOOLED = "$TMPDIR/br".$PRINTER."in_".$$;
++    `cat > $SPOOLED`;
++    $CUPSINPUT = $SPOOLED;
++}
++if ( $lpr_options{'-duplex'} eq 'DuplexNoTumble' &&
++     $cmdoptions =~ /(^|\s)sides=two-sided-long-edge(\s|$)/ ){
++    my $magic = '';
++    if ( open (my $in , '<' , $CUPSINPUT) ){
++	read ($in , $magic , 5);
++	close ($in);
++    }
++    if ( $magic eq '%PDF-' ){
++	$lpr_options{'-duplex'} = 'DuplexTumble';
++	logprint( 2 , "pdftopdf rotated back pages: -duplex DuplexTumble\n");
++    }
++}
++
+ 
+ &exec_lpdconfig ( $basedir ,$PRINTER , \%lpr_options );
+ 
+@@ -584,6 +666,9 @@
+ }else{
+ unlink $TEMPRC;
+ }
++if ( $SPOOLED ne '' ){
++    unlink $SPOOLED;
++}
+ #`echo "\n\nCUSTOM PAGE SIZE ${width}x${height}" >> $LATESTINFO`;
+ #unlink  $TEMPRC;
+ 
+@@ -815,7 +900,31 @@
+ 
+ 	}
+     }
+-    
++
++    #set standard IPP options
++
++    logprint( 2 ,   "\nSET IPP COMMAND OPTIONS\n");
++    foreach(keys %cmdopt){
++	my $option_name_value  =  $_  . "=" .$cmdopt{$_};
++	if ( exists ($ipp_commandline{$option_name_value})){
++	    &set_option_table( \%ipp_commandline,
++			       $option_name_value,
++			       $cmdopt{$_},
++			       \%lpr_options);
++	}
++    }
++    foreach my $item (split (/,/,$cmdopt{media})){
++	foreach my $kind ('media-source' , 'media-type'){
++	    my $option_name_value = "$kind=$item";
++	    if ( exists ($ipp_commandline{$option_name_value})){
++		&set_option_table( \%ipp_commandline,
++				   $option_name_value,
++				   $item,
++				   \%lpr_options);
++	    }
++	}
++    }
++
+     #set Vendor options (string)
+     
+     logprint( 2 ,   "\nSET VENDOR COMMAND OPTIONS\n");
+diff -ru orig/cupswrapper/brother_mfcj6955dw_printer_en.ppd new/cupswrapper/brother_mfcj6955dw_printer_en.ppd
+--- a/cupswrapper/brother_mfcj6955dw_printer_en.ppd	2021-06-09 08:19:30.000000000 +0000
++++ b/cupswrapper/brother_mfcj6955dw_printer_en.ppd	2026-10-17 12:27:21.015432069 +0000
+@@ -40,23 +40,23 @@
+ *%=== UI Constraints ==================================
+ *%( PageSize vs Duplex )
+ *UIConstraints: *PageSize A3 *Duplex
+-*UIConstraints: *PageSize BrA3_B_B *Duplex
++*UIConstraints: *PageSize A3.Fullbleed *Duplex
+ *UIConstraints: *PageSize B4_S *Duplex
+ *UIConstraints: *PageSize Tabloid_S *Duplex
+-*UIConstraints: *PageSize BrLedger_B_B *Duplex
++*UIConstraints: *PageSize Tabloid.Fullbleed *Duplex
+ *UIConstraints: *PageSize Legal *Duplex
+ *UIConstraints: *PageSize A5 *Duplex
+ *UIConstraints: *PageSize A6 *Duplex
+-*UIConstraints: *PageSize BrA6_B *Duplex
++*UIConstraints: *PageSize A6.Fullbleed *Duplex
+ *UIConstraints: *PageSize JISB6 *Duplex
+ *UIConstraints: *PageSize BrPostC4x6_S *Duplex
+-*UIConstraints: *PageSize BrPostC4x6_B *Duplex
++*UIConstraints: *PageSize 4x6.Fullbleed *Duplex
+ *UIConstraints: *PageSize BrIndexC5x8_S *Duplex
+-*UIConstraints: *PageSize BrIndexC5x8_B *Duplex
++*UIConstraints: *PageSize 5x8.Fullbleed *Duplex
+ *UIConstraints: *PageSize BrPhotoL_S *Duplex
+-*UIConstraints: *PageSize BrPhotoL_B *Duplex
++*UIConstraints: *PageSize 3.5x5.Fullbleed *Duplex
+ *UIConstraints: *PageSize Postcard *Duplex
+-*UIConstraints: *PageSize BrHagaki_B *Duplex
++*UIConstraints: *PageSize Postcard.Fullbleed *Duplex
+ *UIConstraints: *PageSize DoublePostcardRotated *Duplex
+ *UIConstraints: *PageSize EnvDL *Duplex
+ *UIConstraints: *PageSize EnvC5 *Duplex
+@@ -74,39 +74,39 @@
+ 
+ 
+ *%  DuplexNoTumble - MediaType
+-*UIConstraints: *BRMediaType Inkjet *Duplex
+-*UIConstraints: *BRMediaType Glossy *Duplex
++*UIConstraints: *MediaType Inkjet *Duplex
++*UIConstraints: *MediaType PhotographicGlossy *Duplex
+ 
+ 
+ *%( PageSize vs Tray2 )
+-*UIConstraints: *BRInputSlot Tray2 *PageSize Executive
+-*UIConstraints: *BRInputSlot Tray2 *PageSize A5
+-*UIConstraints: *BRInputSlot Tray2 *PageSize A6
+-*UIConstraints: *BRInputSlot Tray2 *PageSize BrA6_B
+-*UIConstraints: *BRInputSlot Tray2 *PageSize B5
+-*UIConstraints: *BRInputSlot Tray2 *PageSize JISB6
+-
+-*UIConstraints: *BRInputSlot Tray2 *PageSize BrPostC4x6_S
+-*UIConstraints: *BRInputSlot Tray2 *PageSize BrPostC4x6_B
+-*UIConstraints: *BRInputSlot Tray2 *PageSize BrIndexC5x8_S
+-*UIConstraints: *BRInputSlot Tray2 *PageSize BrIndexC5x8_B
+-*UIConstraints: *BRInputSlot Tray2 *PageSize BrPhotoL_S
+-*UIConstraints: *BRInputSlot Tray2 *PageSize BrPhotoL_B
+-*UIConstraints: *BRInputSlot Tray2 *PageSize BrPhoto2L_S
+-*UIConstraints: *BRInputSlot Tray2 *PageSize BrPhoto2L_B
+-
+-*UIConstraints: *BRInputSlot Tray2 *PageSize Postcard
+-*UIConstraints: *BRInputSlot Tray2 *PageSize Env10
+-*UIConstraints: *BRInputSlot Tray2 *PageSize EnvDL
+-*UIConstraints: *BRInputSlot Tray2 *PageSize EnvC5
+-*UIConstraints: *BRInputSlot Tray2 *PageSize EnvMonarch
+-*UIConstraints: *BRInputSlot Tray2 *PageSize EnvYou4
+-*UIConstraints: *BRInputSlot Tray2 *PageSize EnvChou3
+-*UIConstraints: *BRInputSlot Tray2 *PageSize EnvYou2
+-*UIConstraints: *BRInputSlot Tray2 *PageSize EnvChou4
+-*UIConstraints: *BRInputSlot Tray2 *PageSize 195x270mm
+-*UIConstraints: *BRInputSlot Tray2 *PageSize MexicanLegal
+-*UIConstraints: *BRInputSlot Tray2 *PageSize IndianLegal
++*UIConstraints: *InputSlot Tray2 *PageSize Executive
++*UIConstraints: *InputSlot Tray2 *PageSize A5
++*UIConstraints: *InputSlot Tray2 *PageSize A6
++*UIConstraints: *InputSlot Tray2 *PageSize A6.Fullbleed
++*UIConstraints: *InputSlot Tray2 *PageSize B5
++*UIConstraints: *InputSlot Tray2 *PageSize JISB6
++
++*UIConstraints: *InputSlot Tray2 *PageSize BrPostC4x6_S
++*UIConstraints: *InputSlot Tray2 *PageSize 4x6.Fullbleed
++*UIConstraints: *InputSlot Tray2 *PageSize BrIndexC5x8_S
++*UIConstraints: *InputSlot Tray2 *PageSize 5x8.Fullbleed
++*UIConstraints: *InputSlot Tray2 *PageSize BrPhotoL_S
++*UIConstraints: *InputSlot Tray2 *PageSize 3.5x5.Fullbleed
++*UIConstraints: *InputSlot Tray2 *PageSize BrPhoto2L_S
++*UIConstraints: *InputSlot Tray2 *PageSize 5x7.Fullbleed
++
++*UIConstraints: *InputSlot Tray2 *PageSize Postcard
++*UIConstraints: *InputSlot Tray2 *PageSize Env10
++*UIConstraints: *InputSlot Tray2 *PageSize EnvDL
++*UIConstraints: *InputSlot Tray2 *PageSize EnvC5
++*UIConstraints: *InputSlot Tray2 *PageSize EnvMonarch
++*UIConstraints: *InputSlot Tray2 *PageSize EnvYou4
++*UIConstraints: *InputSlot Tray2 *PageSize EnvChou3
++*UIConstraints: *InputSlot Tray2 *PageSize EnvYou2
++*UIConstraints: *InputSlot Tray2 *PageSize EnvChou4
++*UIConstraints: *InputSlot Tray2 *PageSize 195x270mm
++*UIConstraints: *InputSlot Tray2 *PageSize MexicanLegal
++*UIConstraints: *InputSlot Tray2 *PageSize IndianLegal
+ 
+ 
+ *%==== Media Selection ======================
+@@ -114,31 +114,31 @@
+ *OrderDependency: 11 AnySetup *PageSize
+ *DefaultPageSize: A4
+ *PageSize A3/A3:										"          "
+-*PageSize BrA3_B_B/A3 (Borderless):						"          "
++*PageSize A3.Fullbleed/A3 (Borderless):						"          "
+ *PageSize B4_S/JB4:										"          "
+ *PageSize Tabloid_S/Tabloid:							"          "
+-*PageSize BrLedger_B_B/Tabloid (Borderless):			"          "
++*PageSize Tabloid.Fullbleed/Tabloid (Borderless):			"          "
+ *PageSize A4/A4:						"          "
+-*PageSize BrA4_B/A4 (Borderless):						"          "
++*PageSize A4.Fullbleed/A4 (Borderless):						"          "
+ *PageSize Letter/Letter:				"          "
+-*PageSize BrLetter_B/US Letter (Borderless):			"          "
++*PageSize Letter.Fullbleed/US Letter (Borderless):			"          "
+ *PageSize Legal/Legal:					"          "
+ *PageSize Executive/Executive: 			"          "
+ *PageSize A5/A5:						"          "
+ *PageSize A6/A6:						"          "
+-*PageSize BrA6_B/A6 (Borderless):						"          "
++*PageSize A6.Fullbleed/A6 (Borderless):						"          "
+ *PageSize B5/JIS B5:					"          "
+ *PageSize JISB6/JIS B6:					"          "
+ *PageSize BrPostC4x6_S/4 x 6 in:						"          "
+-*PageSize BrPostC4x6_B/4 x 6 in (Borderless):			"          "
++*PageSize 4x6.Fullbleed/4 x 6 in (Borderless):			"          "
+ *PageSize BrIndexC5x8_S/5 x 8 in:						"          "
+-*PageSize BrIndexC5x8_B/5 x 8 in (Borderless):			"          "
++*PageSize 5x8.Fullbleed/5 x 8 in (Borderless):			"          "
+ *PageSize BrPhotoL_S/3.5 x 5 in:						"          "
+-*PageSize BrPhotoL_B/3.5 x 5 in (Borderless):			"          "
++*PageSize 3.5x5.Fullbleed/3.5 x 5 in (Borderless):			"          "
+ *PageSize BrPhoto2L_S/5 x 7 in: 						"          "
+-*PageSize BrPhoto2L_B/5 x 7 in (Borderless):			"          "
++*PageSize 5x7.Fullbleed/5 x 7 in (Borderless):			"          "
+ *PageSize Postcard/Postcard 1: 							"          "
+-*PageSize BrHagaki_B/Postcard 1 (Borderless):			"          "
++*PageSize Postcard.Fullbleed/Postcard 1 (Borderless):			"          "
+ *PageSize DoublePostcardRotated/Postcard 2 (Double): 	"          "
+ *%PageSize Br12cmDisc_B/12 cm Disc:						"          "
+ *PageSize EnvDL/DL:						"          "
+@@ -164,31 +164,31 @@
+ *OrderDependency: 12 AnySetup *PageRegion
+ *DefaultPageRegion: A4
+ *PageRegion A3/A3:										"          "
+-*PageRegion BrA3_B_B/A3 (Borderless):					"          "
++*PageRegion A3.Fullbleed/A3 (Borderless):					"          "
+ *PageRegion B4_S/JB4:									"          "
+ *PageRegion Tabloid_S/Tabloid:							"          "
+-*PageRegion BrLedger_B_B/Tabloid (Borderless):			"          "
++*PageRegion Tabloid.Fullbleed/Tabloid (Borderless):			"          "
+ *PageRegion A4/A4:							"          "
+-*PageRegion BrA4_B/A4 (Borderless):						"          "
++*PageRegion A4.Fullbleed/A4 (Borderless):						"          "
+ *PageRegion Letter/Letter:					"          "
+-*PageRegion BrLetter_B/Letter (Borderless):				"          "
++*PageRegion Letter.Fullbleed/Letter (Borderless):				"          "
+ *PageRegion Legal/Legal:					"          "
+ *PageRegion Executive/Executive:			"          "
+ *PageRegion A5/A5:							"          "
+ *PageRegion A6/A6:							"          "
+-*PageRegion BrA6_B/A6 (Borderless):			"          "
++*PageRegion A6.Fullbleed/A6 (Borderless):			"          "
+ *PageRegion B5/JIS B5:						"          "
+ *PageRegion JISB6/JIS B6:					"          "
+ *PageRegion BrPostC4x6_S/Photo:							"          "
+-*PageRegion BrPostC4x6_B/4 x 6 in (Borderless):			"          "
++*PageRegion 4x6.Fullbleed/4 x 6 in (Borderless):			"          "
+ *PageRegion BrIndexC5x8_S/5 x 8 in:						"          "
+-*PageRegion BrIndexC5x8_B/5 x 8 in (Borderless):		"          "
++*PageRegion 5x8.Fullbleed/5 x 8 in (Borderless):		"          "
+ *PageRegion BrPhotoL_S/3.5 x 5 in:						"          "
+-*PageRegion BrPhotoL_B/3.5 x 5 in (Borderless):			"          "
++*PageRegion 3.5x5.Fullbleed/3.5 x 5 in (Borderless):			"          "
+ *PageRegion BrPhoto2L_S/5 x 7 in:						"          "
+-*PageRegion BrPhoto2L_B/5 x 7 in (Borderless):			"          "
++*PageRegion 5x7.Fullbleed/5 x 7 in (Borderless):			"          "
+ *PageRegion Postcard/Postcard 1: 						"          "
+-*PageRegion BrHagaki_B/Postcard 1 (Borderless):			"          "
++*PageRegion Postcard.Fullbleed/Postcard 1 (Borderless):			"          "
+ *PageRegion DoublePostcardRotated/Postcard 2 (Double):	"          "
+ *%PageRegion Br12cmDisc_B/12 cm Disc: 					"          "
+ *PageRegion EnvDL/DL:						"          "
+@@ -211,31 +211,31 @@
+ 
+ *DefaultImageableArea: A4
+ *ImageableArea A3/A3:										"9 9 833 1182"
+-*ImageableArea BrA3_B_B/A3 (Borderless):					"0 0 841 1190"
++*ImageableArea A3.Fullbleed/A3 (Borderless):					"0 0 842 1191"
+ *ImageableArea B4_S/JB4:									"9 9 720 1023"
+ *ImageableArea Tabloid_S/Tabloid:							"9 9 783 1215"
+-*ImageableArea BrLedger_B_B/Tabloid (Borderless):			"0 0 791 1223"
++*ImageableArea Tabloid.Fullbleed/Tabloid (Borderless):			"0 0 792 1224"
+ *ImageableArea A4/A4:							"9 9 586 833"
+-*ImageableArea BrA4_B/A4 (Borderless):         					"0 0 595 842"
++*ImageableArea A4.Fullbleed/A4 (Borderless):         					"0 0 595 842"
+ *ImageableArea Letter/Letter:					"9 9 603 783"
+-*ImageableArea BrLetter_B/Letter (Borderless):					"0 0 612 792"
++*ImageableArea Letter.Fullbleed/Letter (Borderless):					"0 0 612 792"
+ *ImageableArea Legal/Legal:						"9 9 603 999"
+ *ImageableArea Executive/Executive:				"9 9 513 747"
+ *ImageableArea A5/A5:							"9 9 411 586"
+ *ImageableArea A6/A6:							"9 9 288 411"
+-*ImageableArea BrA6_B/A6 (Borderless):				"0 0 297 420"
++*ImageableArea A6.Fullbleed/A6 (Borderless):				"0 0 297 420"
+ *ImageableArea B5/JIS B5:						"9 9 507 720"
+ *ImageableArea JISB6/JIS B6:					"9 9 354 507"
+ *ImageableArea BrPostC4x6_S/4 x 6 in:							"9 9 279 423"
+-*ImageableArea BrPostC4x6_B/4 x 6 in (Borderless):				"0 0 288 432"
++*ImageableArea 4x6.Fullbleed/4 x 6 in (Borderless):				"0 0 288 432"
+ *ImageableArea BrIndexC5x8_S/5 x 8 in:							"9 9 351 567"
+-*ImageableArea BrIndexC5x8_B/5 x 8 in (Borderless):				"0 0 360 576"
++*ImageableArea 5x8.Fullbleed/5 x 8 in (Borderless):				"0 0 360 576"
+ *ImageableArea BrPhotoL_S/3.5 x 5 in:							"9 9 243 351"
+-*ImageableArea BrPhotoL_B/3.5 x 5 in (Borderless):				"0 0 252 360"
++*ImageableArea 3.5x5.Fullbleed/3.5 x 5 in (Borderless):				"0 0 252 360"
+ *ImageableArea BrPhoto2L_S/5 x 7 in:							"9 9 350 496"
+-*ImageableArea BrPhoto2L_B/5 x 7 in (Borderless):				"0 0 359 505"
++*ImageableArea 5x7.Fullbleed/5 x 7 in (Borderless):				"0 0 359 505"
+ *ImageableArea Postcard/Postcard 1: 							"9 9 275 410"
+-*ImageableArea BrHagaki_B/Postcard 1 (Borderless):				"0 0 284 419"
++*ImageableArea Postcard.Fullbleed/Postcard 1 (Borderless):				"0 0 284 419"
+ *ImageableArea DoublePostcardRotated/Postcard 2 (Double):	 	"9 9 411 558"
+ *%ImageableArea Br12cmDisc_B/12 cm Disc: 		"0 0 340 340"
+ *ImageableArea EnvDL/DL:						"9 34 303 590"
+@@ -262,33 +262,33 @@
+ *%==== Information About Media Sizes ========
+ *DefaultPaperDimension: A4
+ *PaperDimension A3/A3:										"842 1191"
+-*PaperDimension BrA3_B_B/A3 (Borderless):					"842 1191"
++*PaperDimension A3.Fullbleed/A3 (Borderless):					"842 1191"
+ *PaperDimension B4_S/JB4:									"729 1032"
+ *PaperDimension Tabloid_S/Tabloid:							"792 1224"
+-*PaperDimension BrLedger_B_B/Tabloid (Borderless):			"792 1224"
++*PaperDimension Tabloid.Fullbleed/Tabloid (Borderless):			"792 1224"
+ *PaperDimension A4/A4:							"595 842"
+-*PaperDimension BrA4_B/A4 (Borderless):         			"595 842"
++*PaperDimension A4.Fullbleed/A4 (Borderless):         			"595 842"
+ *PaperDimension Letter/Letter:					"612 792"
+-*PaperDimension BrLetter_B/Letter (Borderless):				"612 792"
++*PaperDimension Letter.Fullbleed/Letter (Borderless):				"612 792"
+ *PaperDimension Legal/Legal:					"612 1008"
+ *PaperDimension Executive/Executive:			"522 756"
+ *PaperDimension A5/A5:							"420 595"
+ *%PaperDimension A5Rotated/A5 Long Edge:		"595 420"
+ *PaperDimension A6/A6:							"297 420"
+-*PaperDimension BrA6_B/A6 (Borderless):						"297 420"
++*PaperDimension A6.Fullbleed/A6 (Borderless):						"297 420"
+ *%PaperDimension ISOB5/ISOB5:					"499 709"
+ *PaperDimension B5/JIS B5:						"516 729"
+ *PaperDimension JISB6/JIS B6:					"363 516"
+ *PaperDimension BrPostC4x6_S/4 x 6 in:						"288 432"
+-*PaperDimension BrPostC4x6_B/4 x 6 in (Borderless):			"288 432"
++*PaperDimension 4x6.Fullbleed/4 x 6 in (Borderless):			"288 432"
+ *PaperDimension BrIndexC5x8_S/5 x 8 in:						"360 576"
+-*PaperDimension BrIndexC5x8_B/5 x 8 in (Borderless):    	"360 576"
++*PaperDimension 5x8.Fullbleed/5 x 8 in (Borderless):    	"360 576"
+ *PaperDimension BrPhotoL_S/3.5 x 5 in:						"252 360"
+-*PaperDimension BrPhotoL_B/3.5 x 5 in (Borderless):			"252 360"
++*PaperDimension 3.5x5.Fullbleed/3.5 x 5 in (Borderless):			"252 360"
+ *PaperDimension BrPhoto2L_S/5 x 7 in:						"359 505"
+-*PaperDimension BrPhoto2L_B/5 x 7 in (Borderless):			"359 505"
++*PaperDimension 5x7.Fullbleed/5 x 7 in (Borderless):			"359 505"
+ *PaperDimension Postcard/Postcard 1: 						"284 419"
+-*PaperDimension BrHagaki_B/Postcard 1 (Borderless):			"284 419"
++*PaperDimension Postcard.Fullbleed/Postcard 1 (Borderless):			"284 419"
+ *PaperDimension DoublePostcardRotated/Postcard 2 (Double): 	"420 567"
+ *%PaperDimension Br12cmDisc_B/12 cm Disc:					"340 340"
+ 
+@@ -321,14 +321,14 @@
+ *CloseUI: *Duplex
+ 
+ *%=== Paper Feed================================
+-*OpenUI *BRInputSlot/Paper Source: PickOne
+-*OrderDependency: 13 AnySetup *BRInputSlot
+-*DefaultBRInputSlot: AutoSelect
+-*BRInputSlot AutoSelect/Auto Select: 	"          "
+-*BRInputSlot Tray1/Tray1:               "          "
+-*BRInputSlot Tray2/Tray2:               "          "
+-*BRInputSlot MPTray/MP Tray:            "          "
+-*CloseUI: *BRInputSlot
++*OpenUI *InputSlot/Paper Source: PickOne
++*OrderDependency: 13 AnySetup *InputSlot
++*DefaultInputSlot: AutoSelect
++*InputSlot AutoSelect/Auto Select: 	"          "
++*InputSlot Tray1/Tray1:               "          "
++*InputSlot Tray2/Tray2:               "          "
++*InputSlot MPTray/MP Tray:            "          "
++*CloseUI: *InputSlot
+ 
+ *%==== Resolution Features =================================
+ *OpenUI *BRResolution/Print Quality: PickOne
+@@ -349,10 +349,10 @@
+ *CloseUI: *BRMonoColor
+ 
+ *%=== Media Type ================================
+-*OpenUI *BRMediaType/Media Type: PickOne
+-*OrderDependency: 17 AnySetup *BRMediaType
+-*DefaultBRMediaType: Plain
+-*BRMediaType Plain/Plain Paper: 		"          "
++*OpenUI *MediaType/Media Type: PickOne
++*OrderDependency: 17 AnySetup *MediaType
++*DefaultMediaType: Stationery
++*MediaType Stationery/Plain Paper: 		"          "
+ *%BRMediaType Thin/Thin Paper:			"          "
+ *%BRMediaType Thick/Thick Paper: 		"          "
+ *%BRMediaType Thicker/Thicker Paper: 	"          "
+@@ -362,16 +362,24 @@
+ *%BRMediaType EnvThin/Env. Thin: 		"          "
+ *%BRMediaType Recycled/Recycled Paper: 	"          "
+ *%BRMediaType Label/Label: 				"          "
+-*BRMediaType Glossy/Glossy Paper: 		"          "
+-*BRMediaType Inkjet/Inkjet Paper: 		"          "
++*MediaType PhotographicGlossy/Glossy Paper: 		"          "
++*MediaType Inkjet/Inkjet Paper: 		"          "
+ *%BRMediaType PostCard/Postcard: 		"          "
+-*BRMediaType IJHagakiCom/Inkjet HagakiUra:      "       "
+-*BRMediaType GlossyHagakiCom/Glossy HagakiUra:      "       "
+-*BRMediaType PlainHagakiCom/Plain HagakiUra:      "       "
+-*BRMediaType IJHagakiAddr/Inkjet HagakiAtena:      "       "
+-*BRMediaType GlossyHagakiAddr/Glossy HagakiAtena:      "       "
+-*BRMediaType PlainHagakiAddr/Plain HagakiAtena:      "       "
+-*CloseUI: *BRMediaType
++*MediaType IJHagakiCom/Inkjet HagakiUra:      "       "
++*MediaType GlossyHagakiCom/Glossy HagakiUra:      "       "
++*MediaType PlainHagakiCom/Plain HagakiUra:      "       "
++*MediaType IJHagakiAddr/Inkjet HagakiAtena:      "       "
++*MediaType GlossyHagakiAddr/Glossy HagakiAtena:      "       "
++*MediaType PlainHagakiAddr/Plain HagakiAtena:      "       "
++*CloseUI: *MediaType
++
++*%=== Presets: map IPP print-color-mode / print-quality ===
++*APPrinterPreset Color_with_Paper_Auto-Detect_-_Draft/Color - Draft: "*BRMonoColor FullColor *BRResolution Draft com.apple.print.preset.graphicsType General com.apple.print.preset.quality low"
++*APPrinterPreset Color_with_Paper_Auto-Detect_-_Normal/Color - Normal: "*BRMonoColor FullColor *BRResolution Normal com.apple.print.preset.graphicsType General com.apple.print.preset.quality mid"
++*APPrinterPreset Color_with_Paper_Auto-Detect_-_High/Color - High: "*BRMonoColor FullColor *BRResolution Fine com.apple.print.preset.graphicsType General com.apple.print.preset.quality high"
++*APPrinterPreset Gray_with_Paper_Auto-Detect_-_Draft/Gray - Draft: "*BRMonoColor Mono *BRResolution Draft com.apple.print.preset.graphicsType General com.apple.print.preset.quality low"
++*APPrinterPreset Gray_with_Paper_Auto-Detect_-_Normal/Gray - Normal: "*BRMonoColor Mono *BRResolution Normal com.apple.print.preset.graphicsType General com.apple.print.preset.quality mid"
++*APPrinterPreset Gray_with_Paper_Auto-Detect_-_High/Gray - High: "*BRMonoColor Mono *BRResolution Fine com.apple.print.preset.graphicsType General com.apple.print.preset.quality high"
+ 
+ *%===  ================================
+ *OpenUI *BRPassword/SecurePrint: PickOne
+diff -ru orig/lpd/filter_mfcj6955dw new/lpd/filter_mfcj6955dw
+--- a/lpd/filter_mfcj6955dw	2021-06-09 08:19:30.000000000 +0000
++++ b/lpd/filter_mfcj6955dw	2026-10-17 11:38:41.838176363 +0000
+@@ -178,7 +178,7 @@
+ 
+ logprint(1, "size_gs = $size_gs ,size_br = $size_br \n");
+ 
+-my $GHOST_SCRIPT=`which gs`;
++my $GHOST_SCRIPT="/usr/bin/gs";
+ chomp($GHOST_SCRIPT);
+ 
+ #my $OUTPUT_TYPE="bit";
